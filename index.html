@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP8266 Sensor Data & Device Control</title>
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/4639/4639117.png" type="image/x-icon">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #007bff;
+            margin-bottom: 20px;
+            font-size: 2em;
+            font-weight: 600;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            font-size: 1em;
+            cursor: pointer;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            color: #ffffff;
+            background-color: #007bff;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+        .btn:active {
+            background-color: #004494;
+            transform: translateY(1px);
+        }
+        #manual-controls {
+            margin: 20px 0;
+        }
+        #progress-bar-container {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        #progress-bar {
+            height: 25px;
+            background-color: #007bff;
+            width: 0%;
+            transition: width 0.5s ease;
+            border-radius: 10px;
+        }
+        #manual-input-section, #pump-controls, #speech-recognition-section {
+            margin: 20px 0;
+        }
+        #manual-input-section input, #manual-input-section button {
+            margin: 5px;
+        }
+        #manual-input-section input {
+            padding: 10px;
+            font-size: 1em;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: calc(100% - 22px);
+        }
+        #submitButton {
+            padding: 12px 24px;
+            font-size: 1em;
+            border: 1px solid #007bff;
+            background-color: #007bff;
+            color: #ffffff;
+            cursor: pointer;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        #submitButton:hover {
+            background-color: #0056b3;
+            border-color: #0056b3;
+        }
+        #submitButton:active {
+            background-color: #004494;
+            border-color: #004494;
+        }
+        #info-section {
+            text-align: left;
+            margin: 20px 0;
+        }
+    </style>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/annyang/2.6.1/annyang.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>ESP8266 Sensor Data & Device Control</h1>
+        
+        <!-- IP Address Input Section -->
+        <div id="manual-input-section">
+            <input type="text" id="ipaddress" placeholder="Enter ESP IP Address">
+            <button class="btn" id="submitButton">Set IP Address</button>
+        </div>
+
+        <!-- Device Controls and Sensor Data -->
+        <div id="manual-controls">
+            <button class="btn" onclick="turnDevice('led', 'on')">Turn On LED</button>
+            <button class="btn" onclick="turnDevice('led', 'off')">Turn Off LED</button>
+            <button class="btn" onclick="turnDevice('fan', 'on')">Turn On Fan</button>
+            <button class="btn" onclick="turnDevice('fan', 'off')">Turn Off Fan</button>
+        </div>
+
+        
+        <div id="speech-recognition-section">
+            <button class="btn" id="start-recognition">Start Speech Recognition</button>
+        </div>
+
+        <h1>Automatic Watering</h1>
+
+        <div id="progress-bar-container">
+            <div id="progress-bar"></div>
+        </div>
+        <span id="sensor-percentage">0%</span>
+
+        <div id="pump-controls">
+            <button class="btn" onclick="turnPump('on')">Turn On Pump</button>
+            <button class="btn" onclick="turnPump('off')">Turn Off Pump</button>
+        </div>
+
+        <div>
+            <button class="btn" onclick="toggleMode()">Toggle Manual/Automatic Mode</button>
+            <div>Current Mode: <span id="mode">Loading...</span></div>
+        </div>
+
+        <!-- Information Section -->
+        <div id="info-section">
+            <h2>Component Information</h2>
+            <p><strong>IP Address Input:</strong> Enter the IP address of the ESP8266 to connect to it.</p>
+            <p><strong>LED Controls:</strong> Turn the LED on or off.</p>
+            <p><strong>Fan Controls:</strong> Turn the fan on or off.</p>
+            <p><strong>Pump Controls:</strong> Turn the pump on or off.</p>
+            <p><strong>Moisture Sensor:</strong> Displays the current sensor data as a progress bar.</p>
+            <p><strong>Toggle Mode:</strong> Switch between manual and automatic modes for controlling devices.</p>
+            <p><strong>Speech Recognition:</strong> Use voice commands to control the devices (e.g., turn on LED).</p>
+        </div>
+    </div>
+
+    <script>
+        // Define global variables
+        window.ip = '192.168.177.37'; // Default IP
+        window.mode = 'Manual'; // Default mode
+
+        // Function to send data to ESP8266
+        window.turnDevice = function(device, status) {
+            console.log(`Sending command to turn ${status} ${device}.`);
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", `http://${window.ip}/controlDevice`, true);
+            xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            xhr.send(`device=${device}&status=${status}`);
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    console.log(`Successfully sent command to turn ${status} ${device}.`);
+                } else {
+                    console.error(`Failed to send command. Status: ${xhr.status}`);
+                }
+            };
+            xhr.onerror = function() {
+                console.error('Request error.');
+            };
+        }
+
+        // Function to send pump command
+        window.turnPump = function(status) {
+            console.log(`Sending command to turn pump ${status}.`);
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", `http://${window.ip}/pump`, true);
+            xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            xhr.send(`status=${status}`);
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    console.log(`Successfully sent command to turn pump ${status}.`);
+                } else {
+                    console.error(`Failed to send command. Status: ${xhr.status}`);
+                }
+            };
+            xhr.onerror = function() {
+                console.error('Request error.');
+            };
+        }
+
+        // Function to update sensor data
+        window.updateSensorData = function() {
+            $.get(`http://${window.ip}/data`, function(data) {
+                $('#sensor-percentage').text(data + '%');
+                $('#progress-bar').css('width', data + '%');
+            });
+        }
+
+        // Function to update mode
+        window.updateMode = function() {
+            $.get(`http://${window.ip}/mode`, function(data) {
+                window.mode = data;
+                $('#mode').text(window.mode);
+                if (window.mode === 'Manual') {
+                    $('#manual-controls').show();
+                    $('#pump-controls').show();
+                } else {
+                    $('#manual-controls').show();
+                    $('#pump-controls').hide();
+                }
+            });
+        }
+
+        // Function to toggle mode
+        window.toggleMode = function() {
+            $.post(`http://${window.ip}/toggleMode`, function() {
+                window.updateMode();
+            });
+        }
+
+        // Set intervals for updating sensor data and mode
+        setInterval(window.updateSensorData, 1000);
+        setInterval(window.updateMode, 1000);
+
+        // Set IP address on submit
+        document.getElementById('submitButton').addEventListener('click', function() {
+            window.ip = document.getElementById('ipaddress').value;
+            if (window.ip) {
+                console.log(`IP Address set to: ${window.ip}`);
+                alert(`IP Address set to: ${window.ip}`);
+            } else {
+                alert('Please enter a valid IP address.');
+            }
+        });
+
+        // Setup speech recognition
+        window.setupSpeechRecognition = function() {
+            if (annyang) {
+                console.log('Annyang is loaded and ready.');
+                const commands = {
+                    '*term': function(term) {
+                        document.getElementById('output').textContent = term;
+                        window.handleCommand(term);
+                    }
+                };
+
+                annyang.addCommands(commands);
+                document.getElementById('start-recognition').addEventListener('click', function() {
+                    console.log('Start recognition button clicked.');
+                    try {
+                        annyang.start({ autoRestart: false, continuous: false });
+                        setTimeout(function() {
+                            annyang.abort();
+                        }, 10000);
+                    } catch (error) {
+                        console.error('Error starting speech recognition: ' + error.message);
+                    }
+                });
+            } else if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+                const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                recognition.lang = 'en-US';
+                recognition.interimResults = false;
+
+                recognition.onresult = function(event) {
+                    const transcript = event.results[0][0].transcript;
+                    document.getElementById('output').textContent = transcript;
+                    window.handleCommand(transcript);
+                };
+
+                recognition.onerror = function(event) {
+                    console.error('Speech recognition error detected: ' + event.error);
+                };
+
+                document.getElementById('start-recognition').addEventListener('click', function() {
+                    console.log('Start recognition button clicked.');
+                    recognition.start();
+                    setTimeout(function() {
+                        recognition.stop();
+                    }, 10000);
+                });
+            } else {
+                document.getElementById('manual-input-section').style.display = 'block';
+                console.log('Speech recognition not supported by your browser.');
+            }
+        }
+
+        // Function to handle recognized commands
+        window.handleCommand = function(term) {
+            console.log(`Handling command: ${term}`);
+            term = term.toLowerCase();
+            if (term.includes("turn on led") && !term.includes("do not") && !term.includes("don't")) {
+                window.turnDevice('led', 'on');
+            } else if (term.includes("turn off led") && !term.includes("do not") && !term.includes("don't")) {
+                window.turnDevice('led', 'off');
+            } else if (term.includes("turn on fan") && !term.includes("do not") && !term.includes("don't")) {
+                window.turnDevice('fan', 'on');
+            } else if (term.includes("turn off fan") && !term.includes("do not") && !term.includes("don't")) {
+                window.turnDevice('fan', 'off');
+            } else if (term.includes("turn on pump") && !term.includes("do not") && !term.includes("don't")) {
+                window.turnPump('on');
+            } else if (term.includes("turn off pump") && !term.includes("do not") && !term.includes("don't")) {
+                window.turnPump('off');
+            } else {
+                console.log('No valid command found.');
+            }
+        }
+
+        // Initialize speech recognition
+        window.setupSpeechRecognition();
+    </script>
+</body>
+</html>
